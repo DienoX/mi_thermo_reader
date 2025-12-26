@@ -23,6 +23,10 @@ class _MiThermoReaderHomePageState
     extends ConsumerState<MiThermoReaderHomePage> {
   BluetoothAdapterState _adapterState = BluetoothAdapterState.unknown;
 
+  // Cache to store the latest advertisement data for each device ID.
+  // This prevents the UI from flickering to "loading" when the scanner restarts.
+  final Map<String, AdvertisementData> _lastKnownData = {};
+
   List<ScanResult> _scanResults = [];
   bool _isScanning = false;
   String? _error;
@@ -46,6 +50,12 @@ class _MiThermoReaderHomePageState
     _scanResultsSubscription = FlutterBluePlus.scanResults.listen(
       (results) {
         _scanResults = results;
+
+        // Update the cache with new data found in this scan cycle
+        for (final result in results) {
+          _lastKnownData[result.device.remoteId.str] = result.advertisementData;
+        }
+
         if (mounted) {
           setState(() {});
         }
@@ -119,12 +129,8 @@ class _MiThermoReaderHomePageState
               .map(
                 (d) => KnownDeviceTile(
                   device: d,
-                  advertisementData:
-                      _scanResults
-                          .firstWhereOrNull(
-                            (r) => r.device.remoteId.str == d.remoteId,
-                          )
-                          ?.advertisementData,
+                  // Retrieve data from our persistent cache instead of the transient scan results
+                  advertisementData: _lastKnownData[d.remoteId],
                 ),
               )
               .toList()
